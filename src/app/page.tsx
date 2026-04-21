@@ -3,11 +3,67 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { usePlayerStore } from '@/store/usePlayerStore';
 import { Play, Pause, SkipBack, SkipForward, Link as LinkIcon, Loader2, Music, Search, X, Moon } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { cachePlaylist, getCachedPlaylist } from '@/lib/db';
 import { usePlaybackPersistence } from '@/hooks/usePlaybackPersistence';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ReactPlayer = dynamic(() => import('react-player'), { ssr: false }) as any;
+
+/**
+ * YTAmbientPlayer — native YouTube iframe + postMessage control.
+ * Avoids react-player entirely (it falls back to <video> in production Turbopack builds
+ * because the YouTube sub-module dynamic import never resolves).
+ */
+function YTAmbientPlayer({
+  videoId, playing, volume,
+}: { videoId: string; playing: boolean; volume: number }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const readyRef = useRef(false);
+  // Always hold the latest values so onLoad can read them without stale closure
+  const latestRef = useRef({ playing, volume });
+  latestRef.current = { playing, volume };
+
+  const post = (func: string, args: unknown[] = []) => {
+    iframeRef.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args }), '*'
+    );
+  };
+
+  const handleLoad = () => {
+    readyRef.current = true;
+    post('setVolume', [Math.round(latestRef.current.volume * 100)]);
+    if (latestRef.current.playing) post('playVideo');
+  };
+
+  // Play / pause after ready
+  useEffect(() => {
+    if (!readyRef.current) return;
+    playing ? post('playVideo') : post('pauseVideo');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+
+  // Volume after ready
+  useEffect(() => {
+    if (!readyRef.current) return;
+    post('setVolume', [Math.round(volume * 100)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume]);
+
+  if (!videoId) return null;
+
+  return (
+    <iframe
+      key={videoId}
+      ref={iframeRef}
+      src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=0&controls=0&loop=1&playlist=${videoId}&mute=0`}
+      allow="autoplay; encrypted-media"
+      onLoad={handleLoad}
+      title="Ambient background music"
+      style={{
+        position: 'fixed', bottom: '-2px', left: '-2px',
+        width: '2px', height: '2px',
+        opacity: 0, border: 'none', pointerEvents: 'none',
+      }}
+    />
+  );
+}
 
 export default function Home() {
   const [url, setUrl] = useState('https://oshoworld.com/maha-geeta-by-osho-01-91');
@@ -69,7 +125,7 @@ export default function Home() {
     setMounted(true);
     // Register Service Worker for audio caching
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {/* non-critical */});
+      navigator.serviceWorker.register('/sw.js').catch(() => {/* non-critical */ });
     }
   }, []);
 
@@ -247,10 +303,10 @@ export default function Home() {
         // Persist to IndexedDB so next load is instant
         cachePlaylist({
           url,
-          tracks:    data.tracks,
+          tracks: data.tracks,
           thumbnail: data.thumbnail ?? null,
-          cachedAt:  Date.now(),
-        }).catch(() => {/* best-effort */});
+          cachedAt: Date.now(),
+        }).catch(() => {/* best-effort */ });
       } else {
         setError('No tracks found on this URL.');
         setShowSearch(true);
@@ -456,8 +512,8 @@ export default function Home() {
                       ref={isActive ? activeTrackRef : null}
                       onClick={() => { setCurrentTrackIndex(i); setIsPlaying(true); }}
                       className={`relative w-full text-left px-5 py-4 rounded-xl transition-all flex items-center gap-4 overflow-hidden ${isActive
-                          ? 'bg-[#18192b] border border-[#2b2d4f] text-[#818CF8]'
-                          : 'bg-transparent border border-transparent text-gray-300 hover:bg-[#1a1a1d]'
+                        ? 'bg-[#18192b] border border-[#2b2d4f] text-[#818CF8]'
+                        : 'bg-transparent border border-transparent text-gray-300 hover:bg-[#1a1a1d]'
                         }`}
                     >
                       {/* Feature 6: faint progress bar behind active track */}
@@ -496,7 +552,7 @@ export default function Home() {
               {currentTrack && (
                 <div className="bg-[#121214] rounded-2xl border border-white/5 p-4 sm:p-5 flex flex-col shadow-2xl min-w-0">
                   <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start min-w-0">
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl bg-cover bg-center shrink-0 border border-white/10 shadow-lg" style={{ backgroundImage: playlistThumbnail ? 'url(' + playlistThumbnail + ')' : 'none' }}></div>
+                    <div className="w-35 h-35 sm:w-35 sm:h-35 rounded-xl bg-cover bg-center shrink-0 border border-white/10 shadow-lg" style={{ backgroundImage: playlistThumbnail ? 'url(' + playlistThumbnail + ')' : 'none' }}></div>
 
                     <div className="flex-1 flex flex-col justify-center w-full min-w-0 mt-2 sm:mt-0">
                       <h2 className="text-base sm:text-lg font-bold text-white mb-1.5 truncate text-center sm:text-left">{currentTrack.title}</h2>
@@ -557,7 +613,7 @@ export default function Home() {
 
               {/* MIXER MODULE */}
               <div className="flex flex-col w-full min-w-0 shrink-0">
-                <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-3 pl-1">Mixer</h2>
+                <h2 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-1 pl-1">Mixer</h2>
 
                 <div className="flex flex-col gap-3">
                   {/* Row 1: Volume Sliders */}
@@ -663,18 +719,14 @@ export default function Home() {
           </div>
         )}
 
-        {/* Hidden ReactPlayer for YouTube Background Ambient Music */}
-        <div className="hidden">
-          <ReactPlayer
-            url={ambientYoutubeUrl}
+        {/* YTAmbientPlayer — tiny invisible iframe, controlled via postMessage */}
+        {ytId && (
+          <YTAmbientPlayer
+            videoId={ytId}
             playing={isBackgroundPlaying}
             volume={backgroundVolume}
-            loop={true}
-            controls={false}
-            width={0}
-            height={0}
           />
-        </div>
+        )}
 
       </div>
 
