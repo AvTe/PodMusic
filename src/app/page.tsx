@@ -3,12 +3,11 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { usePlayerStore } from '@/store/usePlayerStore';
 import { Play, Pause, SkipBack, SkipForward, Link as LinkIcon, Loader2, Music, Search, X, Moon } from 'lucide-react';
-import ReactPlayer from 'react-player';
+import dynamic from 'next/dynamic';
 import { cachePlaylist, getCachedPlaylist } from '@/lib/db';
 import { usePlaybackPersistence } from '@/hooks/usePlaybackPersistence';
-// react-player v3 types conflict with React 19 ref API — cast to any at usage site
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ReactPlayerAny = ReactPlayer as any;
+const ReactPlayer = dynamic(() => import('react-player'), { ssr: false }) as any;
 
 export default function Home() {
   const [url, setUrl] = useState('https://oshoworld.com/maha-geeta-by-osho-01-91');
@@ -666,17 +665,15 @@ export default function Home() {
 
         {/* Hidden ReactPlayer for YouTube Background Ambient Music */}
         <div className="hidden">
-          {mounted && (
-            <ReactPlayerAny
-              url={ambientYoutubeUrl}
-              playing={isBackgroundPlaying}
-              volume={backgroundVolume}
-              loop={true}
-              controls={false}
-              width={0}
-              height={0}
-            />
-          )}
+          <ReactPlayer
+            url={ambientYoutubeUrl}
+            playing={isBackgroundPlaying}
+            volume={backgroundVolume}
+            loop={true}
+            controls={false}
+            width={0}
+            height={0}
+          />
         </div>
 
       </div>
