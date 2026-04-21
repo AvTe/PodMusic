@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { usePlayerStore } from '@/store/usePlayerStore';
 import { Play, Pause, SkipBack, SkipForward, Link as LinkIcon, Loader2, Music, Search, X, Moon } from 'lucide-react';
-import { cachePlaylist, getCachedPlaylist } from '@/lib/db';
+import { cachePlaylist, getCachedPlaylist, saveTrackCompletion, getPlaylistCompletions, type TrackCompletion } from '@/lib/db';
 import { usePlaybackPersistence } from '@/hooks/usePlaybackPersistence';
 
 /**
@@ -73,6 +73,9 @@ export default function Home() {
   const [filterQuery, setFilterQuery] = useState('');
   const [playlistUrl, setPlaylistUrl] = useState('');  // canonical key for DB
   const [cacheHit, setCacheHit] = useState(false);
+  // ── YouTube-style per-track completion bars ────────────────────────────────
+  const [trackProgress, setTrackProgress] = useState<Record<number, TrackCompletion>>({});
+  const saveCompletionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sleepTimer, setSleepTimer] = useState<'off' | '15' | '30' | '60' | 'end'>('off');
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevVolumeRef = useRef(1);
@@ -257,6 +260,35 @@ export default function Home() {
     audioRef,
     onRestore: handleRestore,
   });
+
+  // ── Track completion: save progress like YouTube's red bar ────────────────
+  useEffect(() => {
+    if (!playlistUrl || !duration || duration < 1) return;
+    const pct = Math.min(100, (currentTime / duration) * 100);
+    // Debounce — write to IndexedDB at most once every 3 seconds
+    if (saveCompletionTimerRef.current) clearTimeout(saveCompletionTimerRef.current);
+    saveCompletionTimerRef.current = setTimeout(() => {
+      const entry: TrackCompletion = {
+        id:          `${playlistUrl}::${currentTrackIndex}`,
+        playlistUrl,
+        trackIndex:  currentTrackIndex,
+        percentage:  pct,
+        completed:   pct >= 95,
+        savedAt:     Date.now(),
+      };
+      saveTrackCompletion(entry).catch(() => {});
+      setTrackProgress(prev => ({ ...prev, [currentTrackIndex]: entry }));
+    }, 3000);
+    return () => { if (saveCompletionTimerRef.current) clearTimeout(saveCompletionTimerRef.current); };
+  }, [currentTime, duration, playlistUrl, currentTrackIndex]);
+
+  // ── Track completion: load stored bars when playlist changes ─────────────
+  useEffect(() => {
+    if (!playlistUrl) return;
+    getPlaylistCompletions(playlistUrl)
+      .then(map => setTrackProgress(map))
+      .catch(() => {});
+  }, [playlistUrl]);
 
   const fetchTracks = async () => {
     setLoading(true);
