@@ -548,13 +548,26 @@ export default function Home() {
                         : 'bg-transparent border border-transparent text-gray-300 hover:bg-[#1a1a1d]'
                         }`}
                     >
-                      {/* Feature 6: faint progress bar behind active track */}
-                      {isActive && duration > 0 && (
-                        <div
-                          className="absolute bottom-0 left-0 h-0.5 bg-[#818CF8]/25 rounded-full transition-all duration-1000"
-                          style={{ width: `${(currentTime / duration) * 100}%` }}
-                        />
-                      )}
+                      {/* YouTube-style red track completion bar */}
+                      {(() => {
+                        let pct = 0;
+                        if (isActive && duration > 0) {
+                          pct = Math.min(100, (currentTime / duration) * 100);
+                        } else if (trackProgress[i]) {
+                          pct = trackProgress[i].percentage;
+                        }
+                        if (pct > 0) {
+                          return (
+                            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/5">
+                              <div
+                                className="absolute top-0 left-0 h-full bg-red-600 rounded-r-full transition-all duration-1000"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                       {isActive ? (
                         <span className="w-6 shrink-0 flex items-center justify-center">
                           <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
