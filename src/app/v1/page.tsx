@@ -75,7 +75,6 @@ export default function Home() {
   const [cacheHit, setCacheHit] = useState(false);
   // ── YouTube-style per-track completion bars ────────────────────────────────
   const [trackProgress, setTrackProgress] = useState<Record<number, TrackCompletion>>({});
-  const saveCompletionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sleepTimer, setSleepTimer] = useState<'off' | '15' | '30' | '60' | 'end'>('off');
   const sleepTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevVolumeRef = useRef(1);
@@ -92,6 +91,11 @@ export default function Home() {
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Latest position, readable from timers without adding currentTime to effect deps
+  // (timeupdate fires ~4x/s — a currentTime dep would reset any debounce forever).
+  // Written from the audio event handlers, never during render.
+  const progressRef = useRef({ currentTime: 0, duration: 0 });
 
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -187,8 +191,14 @@ export default function Home() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
+    const updateTime = () => {
+      progressRef.current.currentTime = audio.currentTime;
+      setCurrentTime(audio.currentTime);
+    };
+    const updateDuration = () => {
+      progressRef.current.duration = audio.duration;
+      setDuration(audio.duration);
+    };
 
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
@@ -262,12 +272,15 @@ export default function Home() {
   });
 
   // ── Track completion: save progress like YouTube's red bar ────────────────
+  // Position is read from progressRef, so this effect only re-runs when the
+  // playlist or track changes — never on timeupdate.
   useEffect(() => {
-    if (!playlistUrl || !duration || duration < 1) return;
-    const pct = Math.min(100, (currentTime / duration) * 100);
-    // Debounce — write to IndexedDB at most once every 3 seconds
-    if (saveCompletionTimerRef.current) clearTimeout(saveCompletionTimerRef.current);
-    saveCompletionTimerRef.current = setTimeout(() => {
+    if (!playlistUrl) return;
+
+    const save = () => {
+      const { currentTime: ct, duration: d } = progressRef.current;
+      if (!d || d < 1) return;
+      const pct = Math.min(100, (ct / d) * 100);
       const entry: TrackCompletion = {
         id:          `${playlistUrl}::${currentTrackIndex}`,
         playlistUrl,
@@ -278,9 +291,18 @@ export default function Home() {
       };
       saveTrackCompletion(entry).catch(() => {});
       setTrackProgress(prev => ({ ...prev, [currentTrackIndex]: entry }));
-    }, 3000);
-    return () => { if (saveCompletionTimerRef.current) clearTimeout(saveCompletionTimerRef.current); };
-  }, [currentTime, duration, playlistUrl, currentTrackIndex]);
+    };
+
+    const id = setInterval(save, 3000);
+    window.addEventListener('beforeunload', save);
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('beforeunload', save);
+      // Flush on track switch — this closure still holds the outgoing index.
+      save();
+    };
+  }, [playlistUrl, currentTrackIndex]);
 
   // ── Track completion: load stored bars when playlist changes ─────────────
   useEffect(() => {
