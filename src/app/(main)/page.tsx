@@ -26,6 +26,7 @@ import { SettingsSheet } from './_components/SettingsSheet';
 import { UrlSheet } from './_components/UrlSheet';
 import { WaveBar } from './_components/WaveBar';
 import { Subtitles } from './_components/Subtitles';
+import { ColophonTab } from './_components/ColophonTab';
 import { Tour, type TourStep } from './_components/Tour';
 
 /** Atmospheric lines for the hero — descriptive, not attributed quotations. */
@@ -114,6 +115,7 @@ export default function OshoPage() {
   const [booting, setBooting]           = useState(true);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [colophonOpen, setColophonOpen] = useState(false);
   const [clock, setClock]               = useState<string | null>(null);
   const [lineIndex, setLineIndex]       = useState(0);
   const [tourOpen, setTourOpen]         = useState(false);
@@ -293,6 +295,7 @@ export default function OshoPage() {
         case 'Escape':
           setPlaylistOpen(false);
           setSettingsOpen(false);
+          setColophonOpen(false);
           break;
       }
     };
@@ -464,6 +467,12 @@ export default function OshoPage() {
         subtitlesAvailable={subtitlesAvailable}
         subtitleOffset={subtitleOffset}
         onSubtitleOffset={changeSubtitleOffset}
+      />
+
+      <ColophonTab
+        open={colophonOpen}
+        onOpen={() => setColophonOpen(true)}
+        onClose={() => setColophonOpen(false)}
       />
 
       <Tour steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} />
