@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ListMusic, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
+import { Captions, ListMusic, Pause, Play, SkipBack, SkipForward } from 'lucide-react';
 import { formatTime } from '@/hooks/useAudioPlayback';
 import { FALLBACK_ARTWORK, resolveArtwork } from '@/lib/artwork';
 import type { AudioTrack } from '@/types/audio';
@@ -15,6 +15,9 @@ interface Props {
   canPrev: boolean;
   canNext: boolean;
   playlistOpen: boolean;
+  subtitlesAvailable: boolean;
+  subtitlesOn: boolean;
+  onToggleSubtitles: () => void;
   onToggle: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -25,6 +28,7 @@ interface Props {
 export function PlayerPill({
   track, thumbnail, isPlaying, currentTime, duration,
   canPrev, canNext, playlistOpen,
+  subtitlesAvailable, subtitlesOn, onToggleSubtitles,
   onToggle, onPrev, onNext, onSeekRatio, onTogglePlaylist,
 }: Props) {
   const barRef      = useRef<HTMLDivElement>(null);
@@ -139,6 +143,18 @@ export function PlayerPill({
           >
             <SkipForward className="h-4 w-4 fill-current" />
           </button>
+
+          {subtitlesAvailable && (
+            <button
+              onClick={onToggleSubtitles}
+              aria-label={subtitlesOn ? 'Hide subtitles' : 'Show subtitles'}
+              aria-pressed={subtitlesOn}
+              data-tour="subtitles"
+              className={`rounded-full p-2 transition-colors ${subtitlesOn ? 'text-[#f0a33c]' : 'text-white/45 hover:text-white'}`}
+            >
+              <Captions className="h-4 w-4" />
+            </button>
+          )}
 
           <button
             onClick={onTogglePlaylist}

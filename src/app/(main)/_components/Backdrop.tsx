@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { FALLBACK_ARTWORK } from '@/lib/artwork';
+import { BACKDROP_IMAGE } from '@/lib/artwork';
 
 /** Film-grain tile, inlined so nothing is fetched over the network. */
 const GRAIN =
@@ -18,7 +18,7 @@ export function Backdrop() {
   return (
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: '#06081a' }}>
       <Image
-        src={FALLBACK_ARTWORK}
+        src={BACKDROP_IMAGE}
         alt=""
         fill
         priority

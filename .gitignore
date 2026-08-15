@@ -38,3 +38,12 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Generated subtitles — the current files were produced without word-level
+# alignment and are not accurate enough to ship. Remove this entry once they
+# have been regenerated (see docs/subtitles-colab.md) and the feature is on.
+public/subtitles/
+
+# Source artwork the app icons were generated from. Nothing references it, and
+# anything under public/ is deployed, so keep the 2.9MB original out of the build.
+public/osho-icon.png

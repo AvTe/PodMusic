@@ -1,6 +1,6 @@
 'use client';
 
-import { Compass, Gauge, Moon, Volume2, X } from 'lucide-react';
+import { Captions, Compass, Gauge, Moon, Volume2, X } from 'lucide-react';
 import { SLEEP_OPTIONS, type SleepOption } from '@/hooks/useSleepTimer';
 
 interface Props {
@@ -13,6 +13,9 @@ interface Props {
   sleepTimer: SleepOption;
   onSleepTimer: (option: SleepOption) => void;
   onRestartTour: () => void;
+  subtitlesAvailable: boolean;
+  subtitleOffset: number;
+  onSubtitleOffset: (seconds: number) => void;
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -25,6 +28,7 @@ const SHORTCUTS: [string, string][] = [
 
 export function SettingsSheet({
   open, onClose, volume, onVolume, playbackRate, onPlaybackRate, sleepTimer, onSleepTimer, onRestartTour,
+  subtitlesAvailable, subtitleOffset, onSubtitleOffset,
 }: Props) {
   return (
     <>
@@ -106,6 +110,49 @@ export function SettingsSheet({
               ))}
             </div>
           </section>
+
+          {/* Subtitle sync */}
+          {subtitlesAvailable && (
+            <section>
+              <header className="mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-white/45">
+                  <Captions className="h-3.5 w-3.5" /> Subtitle sync
+                </span>
+                <span className="font-mono text-[11px] text-white">
+                  {subtitleOffset > 0 ? '+' : ''}{subtitleOffset.toFixed(2)}s
+                </span>
+              </header>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onSubtitleOffset(subtitleOffset - 0.25)}
+                  aria-label="Show subtitles earlier"
+                  className="flex-1 rounded-xl border border-white/12 py-2 text-[12px] text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  −0.25s
+                </button>
+                <button
+                  onClick={() => onSubtitleOffset(0)}
+                  className="rounded-xl border border-white/12 px-3 py-2 text-[12px] text-white/50 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => onSubtitleOffset(subtitleOffset + 0.25)}
+                  aria-label="Show subtitles later"
+                  className="flex-1 rounded-xl border border-white/12 py-2 text-[12px] text-white/70 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  +0.25s
+                </button>
+              </div>
+
+              <p className="mt-2 text-[11px] leading-relaxed text-white/35">
+                Negative shows lines earlier, positive later. Also{' '}
+                <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">[</kbd> and{' '}
+                <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">]</kbd> while playing.
+              </p>
+            </section>
+          )}
 
           {/* Walkthrough */}
           <section>

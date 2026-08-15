@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  // Needed so og:image / twitter:image resolve to absolute URLs. Inherited by
+  // every segment, including (main).
+  metadataBase: new URL("https://podmusic-vert.vercel.app"),
   title: "PodMixer — Audiobook & Ambient Music Player",
   description: "Extract audio from any URL and mix with ambient YouTube sounds.",
 };

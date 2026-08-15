@@ -1,4 +1,11 @@
-/** Bundled Osho portrait — backdrop, and artwork of last resort. */
+/**
+ * Full-bleed image behind the main page. Swap this one line to try another.
+ * Kept separate from FALLBACK_ARTWORK because a wide backdrop and a small
+ * circular thumbnail rarely want the same picture.
+ */
+export const BACKDROP_IMAGE = '/osho-hero.png';
+
+/** Bundled Osho portrait — artwork of last resort for the player pill. */
 export const FALLBACK_ARTWORK = '/osho-hero.png';
 
 /**

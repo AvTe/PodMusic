@@ -9,9 +9,26 @@ const poppins = Poppins({
   display:  'swap',
 });
 
+const TITLE = 'OSHO · Discourses';
+const DESCRIPTION = 'Osho discourses, layered with ambient sound.';
+
+// The og/twitter images themselves come from the opengraph-image.jpg /
+// twitter-image.jpg files in this folder — Next emits their tags automatically.
 export const metadata: Metadata = {
-  title:       'OSHO · Discourses',
-  description: 'Osho discourses, layered with ambient sound.',
+  title:       TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    type:        'website',
+    url:         '/',
+    siteName:    TITLE,
+    title:       TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card:        'summary_large_image',
+    title:       TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function OshoLayout({ children }: { children: React.ReactNode }) {

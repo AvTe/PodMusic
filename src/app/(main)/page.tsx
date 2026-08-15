@@ -11,7 +11,9 @@ import { useAudioPlayback } from '@/hooks/useAudioPlayback';
 import { useTrackCompletion } from '@/hooks/useTrackCompletion';
 import { useSleepTimer } from '@/hooks/useSleepTimer';
 import { useAutoplayCountdown } from '@/hooks/useAutoplayCountdown';
+import { useSubtitles } from '@/hooks/useSubtitles';
 import { getYoutubeId, getYoutubeThumbnail } from '@/lib/youtube';
+import { getSeriesLabel } from '@/lib/series';
 import type { PlaybackProgress } from '@/lib/db';
 
 import { Backdrop } from './_components/Backdrop';
@@ -23,6 +25,7 @@ import { AmbientPlayer } from './_components/AmbientPlayer';
 import { SettingsSheet } from './_components/SettingsSheet';
 import { UrlSheet } from './_components/UrlSheet';
 import { WaveBar } from './_components/WaveBar';
+import { Subtitles } from './_components/Subtitles';
 import { Tour, type TourStep } from './_components/Tour';
 
 /** Atmospheric lines for the hero — descriptive, not attributed quotations. */
@@ -38,6 +41,17 @@ const DEFAULT_URL = 'https://oshoworld.com/maha-geeta-by-osho-01-91';
 const LAST_URL_KEY = 'podmixer:last-playlist-url';
 /** Set once the walkthrough has been completed or skipped. */
 const TOUR_KEY = 'podmixer:tour-done';
+/** Manual subtitle sync nudge, in seconds. */
+const SUBTITLE_OFFSET_KEY = 'podmixer:subtitle-offset';
+
+/**
+ * Subtitles are built and working, but the generated VTT timings are not yet
+ * accurate enough to ship — Whisper ran without word-level alignment, so cue
+ * boundaries sit a second or two off the speech. Flip to true once the files
+ * have been regenerated with `word_timestamps=True`
+ * (see docs/subtitles-colab.md). Nothing else needs changing.
+ */
+const SUBTITLES_ENABLED = false;
 
 const DEFAULT_AMBIENT_URL    = 'https://youtu.be/sjkrrmBnpGE';
 const DEFAULT_AMBIENT_VOLUME = 0.25;
@@ -103,11 +117,18 @@ export default function OshoPage() {
   const [clock, setClock]               = useState<string | null>(null);
   const [lineIndex, setLineIndex]       = useState(0);
   const [tourOpen, setTourOpen]         = useState(false);
+  const [subtitlesOn, setSubtitlesOn]   = useState(true);
+  const [subtitleOffset, setSubtitleOffset] = useState(0);
 
   const { load, loading, error, cacheHit, playlistUrl } = usePlaylistLoader();
   const { currentTime, duration, progressRef, seekToRatio, nudge } =
     useAudioPlayback(audioRef, currentTrack?.src);
   const trackProgress = useTrackCompletion({ playlistUrl, trackIndex: currentTrackIndex, progressRef });
+  const { cues, available: subtitlesAvailable } = useSubtitles({
+    playlistUrl,
+    trackIndex: currentTrackIndex,
+    enabled:    SUBTITLES_ENABLED,
+  });
 
   const { sleepTimer, setSleepTimer } = useSleepTimer(
     useCallback(() => setIsPlaying(false), [setIsPlaying]),
@@ -124,6 +145,22 @@ export default function OshoPage() {
     }, [setIsPlaying]),
     onCancel: useCallback(() => setIsPlaying(false), [setIsPlaying]),
   });
+
+  // ── Subtitle sync offset, remembered across sessions ─────────────────────
+  useEffect(() => {
+    const stored = parseFloat(localStorage.getItem(SUBTITLE_OFFSET_KEY) ?? '');
+    if (!Number.isNaN(stored)) {
+      // Deferred so this is not a synchronous setState inside an effect.
+      const t = setTimeout(() => setSubtitleOffset(stored), 0);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  const changeSubtitleOffset = useCallback((seconds: number) => {
+    const clamped = Math.max(-15, Math.min(15, Math.round(seconds * 100) / 100));
+    setSubtitleOffset(clamped);
+    localStorage.setItem(SUBTITLE_OFFSET_KEY, String(clamped));
+  }, []);
 
   // ── Ambient defaults ──────────────────────────────────────────────────────
   // Applied only while the shared store still holds its factory URL, so a
@@ -251,6 +288,8 @@ export default function OshoPage() {
           if (volume > 0) { prevVolumeRef.current = volume; setVolume(0); }
           else setVolume(prevVolumeRef.current || 1);
           break;
+        case 'BracketLeft':  changeSubtitleOffset(subtitleOffset - 0.25); break;
+        case 'BracketRight': changeSubtitleOffset(subtitleOffset + 0.25); break;
         case 'Escape':
           setPlaylistOpen(false);
           setSettingsOpen(false);
@@ -259,7 +298,8 @@ export default function OshoPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isPlaying, volume, nudge, nextTrack, prevTrack, setIsPlaying, setVolume]);
+  }, [isPlaying, volume, nudge, nextTrack, prevTrack, setIsPlaying, setVolume,
+      subtitleOffset, changeSubtitleOffset]);
 
   // ── Load a series ─────────────────────────────────────────────────────────
   const handleLoad = async () => {
@@ -283,13 +323,10 @@ export default function OshoPage() {
   const ambientId        = getYoutubeId(ambientYoutubeUrl);
   const ambientThumbnail = ambientId ? getYoutubeThumbnail(ambientId) : null;
 
-  const series = useMemo(() => {
-    if (!playlistUrl) return undefined;
-    try {
-      const slug = new URL(playlistUrl).pathname.split('/').filter(Boolean).pop() ?? '';
-      return slug.replace(/-/g, ' ').replace(/\d+/g, '').replace(/\s+/g, ' ').trim() || undefined;
-    } catch { return undefined; }
-  }, [playlistUrl]);
+  const series = useMemo(
+    () => (playlistUrl ? getSeriesLabel(playlistUrl) : undefined),
+    [playlistUrl],
+  );
 
   return (
     <main
@@ -354,6 +391,13 @@ export default function OshoPage() {
         />
       </div>
 
+      <Subtitles
+        cues={cues}
+        currentTime={currentTime}
+        visible={SUBTITLES_ENABLED && subtitlesOn}
+        offset={subtitleOffset}
+      />
+
       {/* ── Player pill ─────────────────────────────────────────────────── */}
       {currentTrack && (
         <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex justify-center px-4">
@@ -366,6 +410,9 @@ export default function OshoPage() {
             canPrev={currentTrackIndex > 0}
             canNext={currentTrackIndex < tracks.length - 1}
             playlistOpen={playlistOpen}
+            subtitlesAvailable={subtitlesAvailable}
+            subtitlesOn={subtitlesOn}
+            onToggleSubtitles={() => setSubtitlesOn(v => !v)}
             onToggle={() => setIsPlaying(!isPlaying)}
             onPrev={prevTrack}
             onNext={nextTrack}
@@ -414,6 +461,9 @@ export default function OshoPage() {
         sleepTimer={sleepTimer}
         onSleepTimer={setSleepTimer}
         onRestartTour={() => { setSettingsOpen(false); setTourOpen(true); }}
+        subtitlesAvailable={subtitlesAvailable}
+        subtitleOffset={subtitleOffset}
+        onSubtitleOffset={changeSubtitleOffset}
       />
 
       <Tour steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} />
