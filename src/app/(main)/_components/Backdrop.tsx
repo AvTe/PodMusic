@@ -19,7 +19,7 @@ export function Backdrop() {
     <div className="fixed inset-0 -z-10 overflow-hidden" style={{ background: '#06081a' }}>
       <Image
         src={BACKDROP_IMAGE}
-        alt=""
+        alt="Portrait of Osho"
         fill
         priority
         sizes="100vw"

@@ -25,6 +25,10 @@ export function HeroTitle({ quote, series }: Props) {
         }}
       >
         OSHO
+        {/* The wordmark alone is the whole visible heading, which tells a
+            crawler nothing. This states what the page actually is — read by
+            screen readers too. */}
+        <span className="sr-only"> discourses — listen to full audio series online with ambient sound</span>
       </h1>
 
       <p className="mt-6 max-w-2xl text-balance px-6 text-base font-light text-white/70 sm:text-lg">
