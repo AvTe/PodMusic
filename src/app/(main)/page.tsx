@@ -25,6 +25,7 @@ import { AmbientPlayer } from './_components/AmbientPlayer';
 import { SettingsSheet } from './_components/SettingsSheet';
 import { UrlSheet } from './_components/UrlSheet';
 import { WaveBar } from './_components/WaveBar';
+import { LightParticles } from './_components/LightParticles';
 import { Subtitles } from './_components/Subtitles';
 import { ColophonTab } from './_components/ColophonTab';
 import { Tour, type TourStep } from './_components/Tour';
@@ -392,6 +393,8 @@ export default function OshoPage() {
     >
       <Backdrop />
       <WaveBar playing={isPlaying} playbackRate={playbackRate} />
+      {/* After the wave so the motes read as embers lifting out of the glow. */}
+      <LightParticles />
 
       {/* ── Top chrome ──────────────────────────────────────────────────── */}
       <header className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-5 py-5 sm:px-7">
