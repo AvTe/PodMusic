@@ -255,13 +255,67 @@ export default function OshoPage() {
     audio.playbackRate = playbackRate;
   }, [volume, playbackRate]);
 
-  // ── Drive play/pause ──────────────────────────────────────────────────────
+  // ── Resilient playback ────────────────────────────────────────────────────
+  // A media element whose byte stream has died — a dropped mobile connection,
+  // or a stream that was cut while paused — rejects every subsequent play()
+  // until the element is reloaded. That is what used to force a page refresh.
+  // Reload it, put the position back, and try once more before giving up.
+  const recoveryAttempts = useRef(0);
+
+  const startPlayback = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      await audio.play();
+      recoveryAttempts.current = 0;
+      return;
+    } catch {
+      /* fall through to recovery */
+    }
+
+    // Bail out rather than reload forever on a genuinely broken source.
+    if (recoveryAttempts.current >= 3) {
+      setIsPlaying(false);
+      return;
+    }
+    recoveryAttempts.current += 1;
+
+    const resumeAt = progressRef.current.currentTime;
+    audio.load();
+
+    if (resumeAt > 0) {
+      await new Promise<void>((resolve) => {
+        const done = () => { audio.removeEventListener('loadedmetadata', done); resolve(); };
+        audio.addEventListener('loadedmetadata', done);
+        setTimeout(done, 5000);   // never hang if metadata does not arrive
+      });
+      try { audio.currentTime = resumeAt; } catch { /* seek refused before metadata */ }
+    }
+
+    try {
+      await audio.play();
+      recoveryAttempts.current = 0;
+    } catch (err) {
+      console.error('Playback could not be resumed', err);
+      setIsPlaying(false);   // keep the button honest rather than showing a false "playing"
+    }
+  }, [progressRef, setIsPlaying]);
+
+  /** The element failed on its own — recover only if the user still wants audio. */
+  const handleAudioError = useCallback(() => {
+    if (usePlayerStore.getState().isPlaying) void startPlayback();
+  }, [startPlayback]);
+
+  // Give a fresh track a fresh set of recovery attempts.
+  useEffect(() => { recoveryAttempts.current = 0; }, [currentTrackIndex]);
+
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (isPlaying && currentTrack) audio.play().catch(e => console.error('Audio error', e));
+    if (isPlaying && currentTrack) void startPlayback();
     else if (!isPlaying) audio.pause();
-  }, [isPlaying, currentTrackIndex, currentTrack]);
+  }, [isPlaying, currentTrackIndex, currentTrack, startPlayback]);
 
   // ── Resume position ───────────────────────────────────────────────────────
   const handleRestore = useCallback((progress: PlaybackProgress) => {
@@ -520,7 +574,13 @@ export default function OshoPage() {
       )}
 
       {currentTrack && (
-        <audio ref={audioRef} src={currentTrack.src} onEnded={handleEnded} />
+        <audio
+          ref={audioRef}
+          src={currentTrack.src}
+          onEnded={handleEnded}
+          onError={handleAudioError}
+          preload="metadata"
+        />
       )}
 
       {ambientId && (
