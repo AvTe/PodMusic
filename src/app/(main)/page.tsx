@@ -45,6 +45,8 @@ const LAST_URL_KEY = 'podmixer:last-playlist-url';
 const TOUR_KEY = 'podmixer:tour-done';
 /** Manual subtitle sync nudge, in seconds. */
 const SUBTITLE_OFFSET_KEY = 'podmixer:subtitle-offset';
+/** Remembered per device. */
+const DUCKING_KEY = 'podmixer:ambient-ducking';
 
 /**
  * Subtitles are built and working, but the generated VTT timings are not yet
@@ -57,6 +59,15 @@ const SUBTITLES_ENABLED = false;
 
 const DEFAULT_AMBIENT_URL    = 'https://youtu.be/sjkrrmBnpGE';
 const DEFAULT_AMBIENT_VOLUME = 0.25;
+/**
+ * How far the bed drops while narration plays.
+ *
+ * The pad and the speech occupy the same 200 Hz - 5 kHz band, so the bed masks
+ * consonants long before it sounds "too loud" on its own. Dipping it under
+ * speech and letting it swell back in the gaps buys real intelligibility and
+ * costs nothing - it needs no access to the audio itself.
+ */
+const AMBIENT_DUCK_RATIO = 0.45;
 /** The shared store's own default — only overridden while it is untouched. */
 const STORE_AMBIENT_DEFAULT  = 'https://www.youtube.com/watch?v=1zxO2oA9Pww';
 
@@ -97,10 +108,10 @@ export default function OshoPage() {
   const {
     tracks, playlistThumbnail, currentTrackIndex, isPlaying,
     volume, backgroundVolume, playbackRate,
-    isBackgroundPlaying, ambientYoutubeUrl,
+    isBackgroundPlaying, ambientYoutubeUrl, ambientDucking,
     setTracks, setPlaylistThumbnail, setCurrentTrackIndex, setIsPlaying,
     setVolume, setBackgroundVolume, setPlaybackRate,
-    setIsBackgroundPlaying, setAmbientYoutubeUrl,
+    setIsBackgroundPlaying, setAmbientYoutubeUrl, setAmbientDucking,
     nextTrack, prevTrack,
   } = usePlayerStore();
 
@@ -133,6 +144,11 @@ export default function OshoPage() {
     enabled:    SUBTITLES_ENABLED,
   });
 
+  // The bed dips under speech and swells back in the pauses.
+  const effectiveAmbientVolume = ambientDucking && isPlaying
+    ? backgroundVolume * AMBIENT_DUCK_RATIO
+    : backgroundVolume;
+
   const { sleepTimer, setSleepTimer } = useSleepTimer(
     useCallback(() => setIsPlaying(false), [setIsPlaying]),
   );
@@ -158,6 +174,20 @@ export default function OshoPage() {
       return () => clearTimeout(t);
     }
   }, []);
+
+  // Ambient ducking preference
+  useEffect(() => {
+    const stored = localStorage.getItem(DUCKING_KEY);
+    if (stored === null) return;
+    // Deferred so this is not a synchronous setState inside an effect.
+    const t = setTimeout(() => setAmbientDucking(stored === '1'), 0);
+    return () => clearTimeout(t);
+  }, [setAmbientDucking]);
+
+  const changeAmbientDucking = useCallback((on: boolean) => {
+    setAmbientDucking(on);
+    localStorage.setItem(DUCKING_KEY, on ? '1' : '0');
+  }, [setAmbientDucking]);
 
   const changeSubtitleOffset = useCallback((seconds: number) => {
     const clamped = Math.max(-15, Math.min(15, Math.round(seconds * 100) / 100));
@@ -524,6 +554,8 @@ export default function OshoPage() {
         subtitlesAvailable={subtitlesAvailable}
         subtitleOffset={subtitleOffset}
         onSubtitleOffset={changeSubtitleOffset}
+        ambientDucking={ambientDucking}
+        onAmbientDucking={changeAmbientDucking}
       />
 
       <ColophonTab
@@ -590,7 +622,7 @@ export default function OshoPage() {
         <AmbientPlayer
           videoId={ambientId}
           playing={isBackgroundPlaying}
-          volume={backgroundVolume}
+          volume={effectiveAmbientVolume}
         />
       )}
     </main>

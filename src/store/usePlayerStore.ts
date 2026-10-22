@@ -11,6 +11,8 @@ interface PlayerState {
   playbackRate: number; // For pitch/speed
   isBackgroundPlaying: boolean;
   ambientYoutubeUrl: string;
+  /** Dip the ambient bed while narration plays so it stops masking speech. */
+  ambientDucking: boolean;
   setTracks: (tracks: AudioTrack[]) => void;
   setPlaylistThumbnail: (url: string) => void;
   setCurrentTrackIndex: (index: number) => void;
@@ -20,6 +22,7 @@ interface PlayerState {
   setPlaybackRate: (rate: number) => void;
   setIsBackgroundPlaying: (isPlaying: boolean) => void;
   setAmbientYoutubeUrl: (url: string) => void;
+  setAmbientDucking: (on: boolean) => void;
   nextTrack: () => void;
   prevTrack: () => void;
 }
@@ -34,6 +37,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   playbackRate: 1,
   isBackgroundPlaying: false,
   ambientYoutubeUrl: 'https://www.youtube.com/watch?v=1zxO2oA9Pww', // Default rain sounds
+  ambientDucking: true,
   setTracks: (tracks) => set({ tracks }),
   setPlaylistThumbnail: (playlistThumbnail) => set({ playlistThumbnail }),
   setCurrentTrackIndex: (index) => set({ currentTrackIndex: index }),
@@ -43,6 +47,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setPlaybackRate: (playbackRate) => set({ playbackRate }),
   setIsBackgroundPlaying: (isBackgroundPlaying) => set({ isBackgroundPlaying }),
   setAmbientYoutubeUrl: (ambientYoutubeUrl) => set({ ambientYoutubeUrl }),
+  setAmbientDucking: (ambientDucking) => set({ ambientDucking }),
   nextTrack: () =>
     set((state) => ({
       currentTrackIndex: Math.min(state.currentTrackIndex + 1, state.tracks.length - 1),

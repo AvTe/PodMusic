@@ -1,6 +1,6 @@
 'use client';
 
-import { Captions, Compass, Gauge, Moon, Volume2, X } from 'lucide-react';
+import { Captions, Compass, Gauge, Moon, Volume2, Waves, X } from 'lucide-react';
 import { SLEEP_OPTIONS, type SleepOption } from '@/hooks/useSleepTimer';
 
 interface Props {
@@ -16,6 +16,50 @@ interface Props {
   subtitlesAvailable: boolean;
   subtitleOffset: number;
   onSubtitleOffset: (seconds: number) => void;
+  ambientDucking: boolean;
+  onAmbientDucking: (on: boolean) => void;
+}
+
+interface ToggleProps {
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+}
+
+function Toggle({ checked, onChange, label, hint, icon }: ToggleProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+        checked ? 'border-[#f0a33c]/40 bg-[#f0a33c]/10' : 'border-white/12 hover:bg-white/5'
+      }`}
+    >
+      <span className={`mt-0.5 ${checked ? 'text-[#f0a33c]' : 'text-white/40'}`}>{icon}</span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] text-white/85">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-white/35">{hint}</span>
+      </span>
+
+      <span
+        className={`mt-1 flex h-[18px] w-[32px] shrink-0 items-center rounded-full p-[2px] transition-colors ${
+          checked ? 'bg-[#f0a33c]' : 'bg-white/15'
+        }`}
+      >
+        <span
+          className={`h-[14px] w-[14px] rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-[14px]' : 'translate-x-0'
+          }`}
+        />
+      </span>
+    </button>
+  );
 }
 
 const SHORTCUTS: [string, string][] = [
@@ -29,6 +73,7 @@ const SHORTCUTS: [string, string][] = [
 export function SettingsSheet({
   open, onClose, volume, onVolume, playbackRate, onPlaybackRate, sleepTimer, onSleepTimer, onRestartTour,
   subtitlesAvailable, subtitleOffset, onSubtitleOffset,
+  ambientDucking, onAmbientDucking,
 }: Props) {
   return (
     <>
@@ -86,6 +131,18 @@ export function SettingsSheet({
             <div className="mt-2 flex justify-between font-mono text-[9px] text-white/25">
               <span>0.5x</span><span>1x</span><span>2x</span>
             </div>
+          </section>
+
+          {/* Sound */}
+          <section>
+            <h3 className="mb-3 text-[11px] uppercase tracking-[0.2em] text-white/45">Sound</h3>
+            <Toggle
+              checked={ambientDucking}
+              onChange={onAmbientDucking}
+              icon={<Waves className="h-4 w-4" />}
+              label="Duck ambient under speech"
+              hint="Fades the background bed down while the discourse plays and back up in the pauses."
+            />
           </section>
 
           {/* Sleep timer */}
