@@ -4,13 +4,17 @@ import { useCallback, useState } from 'react';
 import { cachePlaylist, getCachedPlaylist } from '@/lib/db';
 import type { AudioTrack } from '@/types/audio';
 
+/** The series first-time visitors start on. Must match src/data/default-series.json. */
+export const DEFAULT_SERIES_URL = 'https://oshoworld.com/maha-geeta-by-osho-01-91';
+
 export interface LoadedPlaylist {
   tracks: AudioTrack[];
   thumbnail: string | null;
 }
 
 /**
- * Loads a playlist for a URL — IndexedDB cache first, `/api/scrape` on a miss.
+ * Loads a playlist for a URL — IndexedDB cache first, then the bundled snapshot
+ * for the default series, then `/api/scrape`.
  * On success `playlistUrl` becomes the canonical key every DB write is keyed by.
  */
 export function usePlaylistLoader() {
@@ -36,6 +40,19 @@ export function usePlaylistLoader() {
         return { tracks: cached.tracks as AudioTrack[], thumbnail: cached.thumbnail };
       }
     } catch { /* fall through to network */ }
+
+    // ── Bundled snapshot of the default series ───────────────────────────────
+    // First visits (and expired caches) start instantly instead of waiting
+    // ~11 s on a live scrape. Code-split, so only those visits download it.
+    if (url.trim().replace(/\/$/, '') === DEFAULT_SERIES_URL) {
+      try {
+        const { default: snapshot } = await import('@/data/default-series.json');
+        setPlaylistUrl(url);
+        cachePlaylist({ ...snapshot, url, cachedAt: Date.now() }).catch(() => {});
+        setLoading(false);
+        return { tracks: snapshot.tracks, thumbnail: snapshot.thumbnail };
+      } catch { /* fall through to network */ }
+    }
 
     // ── Network scrape ───────────────────────────────────────────────────────
     try {

@@ -66,6 +66,16 @@ Two different URL states exist and must not be conflated: `url` is the search-bo
 
 Both paths cap at **20 pages** and sleep 300–800 ms between requests. These limits are deliberate politeness throttling — keep them when editing.
 
+Results are shared server-side via `unstable_cache` (`scrapeSeriesCached`, 24 h revalidate, stale-while-revalidate), so only the first request for a URL ever pays the ~5–11 s scrape. Empty results throw `NoTracksError` so failures are never cached. Bump the `'scrape-series-v1'` key part if the response shape changes. The project does not enable `cacheComponents`, which is why this is `unstable_cache` rather than `'use cache'`.
+
+### Default series snapshot
+
+[src/data/default-series.json](src/data/default-series.json) is a committed copy of the default series (`DEFAULT_SERIES_URL` in [usePlaylistLoader](src/hooks/usePlaylistLoader.ts)). First-time visitors start on it immediately — there is no URL modal on first visit; the bootstrap in `page.tsx` loads the default series when `podmixer:last-playlist-url` is unset and only opens the URL sheet if that load fails. The JSON is code-split via dynamic `import()`. It goes stale if the source site renames files or adds tracks — regenerate against a running server and commit:
+
+```bash
+node scripts/snapshot-default-series.mjs http://localhost:3000
+```
+
 Note the type asymmetry: this route defines its own local `Track` type and returns unvalidated JSON; the Zod `audioTrackSchema` in [src/types/audio.ts](src/types/audio.ts) is only used for the client-side `AudioTrack` type.
 
 ### Three persistence layers
@@ -74,7 +84,7 @@ Note the type asymmetry: this route defines its own local `Track` type and retur
 2. **Service worker** — [public/sw.js](public/sw.js), registered on mount. It has **no `fetch` handler and caches nothing**, by design. It used to serve audio cache-first, which caused two production bugs: calling `respondWith()` on a media request proxies the byte stream through the worker, and browsers kill an idle worker after ~30s — so pausing for half a minute killed the stream, the element errored, and every later `play()` rejected until the page was reloaded. It also passed 40MB responses to `cache.put(response.clone())`, buffering whole files on mobile. Caching never worked anyway: the host answers range requests with `206` and only `200` was stored. All that remains is an `activate` handler that deletes old `podmixer-audio-*` caches. **Do not reintroduce media interception** — offline support has to be an explicit download action that fetches and stores the file itself.
 3. **[usePlaybackPersistence](src/hooks/usePlaybackPersistence.ts)** — restores position when `playlistUrl` changes, saves every 5 s and on `beforeunload`. Track-completion writes are separately debounced at 3 s in `page.tsx`.
 
-Cache-before-network is the load order: `fetchTracks` checks `getCachedPlaylist(url)` first and only hits `/api/scrape` on a miss.
+Cache-before-network is the load order: `usePlaylistLoader.load` checks `getCachedPlaylist(url)` first, then the bundled snapshot (default series only), and only hits `/api/scrape` after both miss.
 
 ### Styling
 

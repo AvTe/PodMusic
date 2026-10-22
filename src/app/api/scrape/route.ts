@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import * as cheerio from 'cheerio';
 
 type Track = { id: string; title: string; src: string; duration: string };
@@ -289,6 +290,61 @@ async function scrapeWithCheerio(
   return { tracks, thumbnail };
 }
 
+// ─── Scrape, both strategies ──────────────────────────────────────────────────
+type ScrapeResult = { tracks: Track[]; thumbnail: string | null; pagesScraped: number };
+
+/** Thrown rather than returned so an empty result is never cached. */
+class NoTracksError extends Error {}
+
+async function scrapeSeries(baseUrl: string): Promise<ScrapeResult> {
+  // Strategy 1 — Next.js __NEXT_DATA__
+  const nextResult = await tryNextJsStrategy(baseUrl);
+  if (nextResult && nextResult.tracks.length > 0) return nextResult;
+
+  // Strategy 2 — Cheerio HTML loop with delay
+  const allTracks: Track[] = [];
+  const seenSrcs = new Set<string>();
+  let thumbnail: string | null = null;
+  let pagesScraped = 0;
+
+  for (let page = 1; page <= 20; page++) {
+    if (page > 1) await delay(800); // guide recommends throttling
+
+    const pageUrl = page === 1
+      ? baseUrl
+      : `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}page=${page}`;
+
+    const { tracks, thumbnail: thumb } = await scrapeWithCheerio(pageUrl, allTracks.length);
+    if (!thumbnail && thumb) thumbnail = thumb;
+    if (!tracks.length) break;
+
+    let addedNew = false;
+    for (const track of tracks) {
+      if (!seenSrcs.has(track.src)) {
+        seenSrcs.add(track.src);
+        allTracks.push(track);
+        addedNew = true;
+      }
+    }
+    if (!addedNew) break;
+    pagesScraped = page;
+  }
+
+  if (!allTracks.length) throw new NoTracksError();
+  return { tracks: allTracks, thumbnail, pagesScraped };
+}
+
+/**
+ * A full scrape of a 91-track series takes ~11 s and ~10 requests to the source
+ * site, so results are shared across every visitor and deployment. Past
+ * `revalidate` the stale copy is still served while a fresh scrape runs in the
+ * background — only the very first request for a URL ever waits. Failures throw
+ * and are therefore never cached.
+ */
+const scrapeSeriesCached = unstable_cache(scrapeSeries, ['scrape-series-v1'], {
+  revalidate: 60 * 60 * 24,
+});
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
@@ -297,52 +353,11 @@ export async function POST(req: Request) {
 
     const parsed = new URL(url);
     parsed.searchParams.delete('page');
-    const baseUrl = parsed.toString();
 
-    // Strategy 1 — Next.js __NEXT_DATA__
-    const nextResult = await tryNextJsStrategy(baseUrl);
-    if (nextResult && nextResult.tracks.length > 0) {
-      return NextResponse.json({
-        tracks:      nextResult.tracks,
-        thumbnail:   nextResult.thumbnail,
-        pagesScraped: nextResult.pagesScraped,
-      });
-    }
-
-    // Strategy 2 — Cheerio HTML loop with delay
-    const allTracks: Track[] = [];
-    const seenSrcs = new Set<string>();
-    let thumbnail: string | null = null;
-    let pagesScraped = 0;
-
-    for (let page = 1; page <= 20; page++) {
-      if (page > 1) await delay(800); // guide recommends throttling
-
-      const pageUrl = page === 1
-        ? baseUrl
-        : `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}page=${page}`;
-
-      const { tracks, thumbnail: thumb } = await scrapeWithCheerio(pageUrl, allTracks.length);
-      if (!thumbnail && thumb) thumbnail = thumb;
-      if (!tracks.length) break;
-
-      let addedNew = false;
-      for (const track of tracks) {
-        if (!seenSrcs.has(track.src)) {
-          seenSrcs.add(track.src);
-          allTracks.push(track);
-          addedNew = true;
-        }
-      }
-      if (!addedNew) break;
-      pagesScraped = page;
-    }
-
-    if (!allTracks.length)
-      return NextResponse.json({ error: 'No audio tracks found on this URL.' });
-
-    return NextResponse.json({ tracks: allTracks, thumbnail, pagesScraped });
+    return NextResponse.json(await scrapeSeriesCached(parsed.toString()));
   } catch (error) {
+    if (error instanceof NoTracksError)
+      return NextResponse.json({ error: 'No audio tracks found on this URL.' });
     console.error('Scrape error:', error);
     return NextResponse.json({ error: 'Failed to scrape the URL.' }, { status: 500 });
   }

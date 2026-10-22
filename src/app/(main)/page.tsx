@@ -6,7 +6,7 @@ import { Loader2, Search, Settings2, X } from 'lucide-react';
 
 import { usePlayerStore } from '@/store/usePlayerStore';
 import { usePlaybackPersistence } from '@/hooks/usePlaybackPersistence';
-import { usePlaylistLoader } from '@/hooks/usePlaylistLoader';
+import { DEFAULT_SERIES_URL, usePlaylistLoader } from '@/hooks/usePlaylistLoader';
 import { useAudioPlayback } from '@/hooks/useAudioPlayback';
 import { useTrackCompletion } from '@/hooks/useTrackCompletion';
 import { useSleepTimer } from '@/hooks/useSleepTimer';
@@ -36,8 +36,6 @@ const HERO_LINES = [
   'Every discourse is a doorway.',
   'At your own pace, with ambient sound beneath.',
 ];
-
-const DEFAULT_URL = 'https://oshoworld.com/maha-geeta-by-osho-01-91';
 
 /** Last series the user loaded. Its presence is what marks a return visit. */
 const LAST_URL_KEY = 'podmixer:last-playlist-url';
@@ -120,9 +118,9 @@ export default function OshoPage() {
   const audioRef      = useRef<HTMLAudioElement>(null);
   const prevVolumeRef = useRef(1);
 
-  const [url, setUrl]                   = useState(DEFAULT_URL);
-  // Starts closed for everyone — the bootstrap below opens it only if there is
-  // no remembered series, so a returning visitor never sees it flash.
+  const [url, setUrl]                   = useState(DEFAULT_SERIES_URL);
+  // Starts closed for everyone — the bootstrap below opens it only if no series
+  // could be loaded, so nobody sees it flash.
   const [urlOpen, setUrlOpen]           = useState(false);
   const [booting, setBooting]           = useState(true);
   const [playlistOpen, setPlaylistOpen] = useState(false);
@@ -218,23 +216,21 @@ export default function OshoPage() {
   }, []);
 
   // ── Bootstrap ─────────────────────────────────────────────────────────────
-  // First visit: open the URL sheet. Return visit: silently reload the last
-  // series. `load` checks IndexedDB first, so a cached series appears instantly
-  // and the network is only touched once the 7-day cache has expired.
+  // Return visit: silently reload the last series. First visit: start straight
+  // on the default series rather than asking for a URL nobody has yet — `load`
+  // serves it from a bundled snapshot, so it appears without a scrape. A cached
+  // series likewise appears instantly; the network is only touched for other
+  // series once the 7-day cache has expired.
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      const saved = localStorage.getItem(LAST_URL_KEY);
+      const saved  = localStorage.getItem(LAST_URL_KEY);
+      const target = saved ?? DEFAULT_SERIES_URL;
 
-      if (!saved) {
-        if (!cancelled) { setUrlOpen(true); setBooting(false); }
-        return;
-      }
+      if (!cancelled) setUrl(target);
 
-      if (!cancelled) setUrl(saved);
-
-      const result = await load(saved);
+      const result = await load(target);
       if (cancelled) return;
 
       if (!result) {
@@ -249,6 +245,7 @@ export default function OshoPage() {
       // Track index and position are restored by usePlaybackPersistence.
       setIsPlaying(false);
       setBooting(false);
+      if (!saved) localStorage.setItem(LAST_URL_KEY, target);
     };
 
     void bootstrap();
